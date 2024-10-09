@@ -1,5 +1,6 @@
 import aiohttp
-from fastapi import HTTPException
+
+from app.exceptions import CityNotFound, APIError
 
 
 async def get_coordinates(
@@ -20,10 +21,11 @@ async def get_coordinates(
                 data = await response.json()
                 if data:
                     return {
+                        'name': data[0]['name'],
                         'latitude': data[0]['lat'],
                         'longitude': data[0]['lon']
                     }
                 else:
-                    raise HTTPException(status_code=404, detail="Город не найден")
+                    raise CityNotFound
             else:
-                raise HTTPException(status_code=502, detail="Проблемы с внешним API")
+                raise APIError
