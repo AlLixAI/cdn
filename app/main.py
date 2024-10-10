@@ -17,7 +17,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    redis = aioredis.from_url("redis://localhost:6379", decode_responses=False)
+    redis = aioredis.from_url("redis://cdn_redis:6379", decode_responses=False)
     FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
     yield
 
