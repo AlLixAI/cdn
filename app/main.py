@@ -2,7 +2,7 @@ import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.cities.router import router as cities_router
@@ -10,13 +10,14 @@ from app.cities.router import router as cities_router
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
-from app.service.cache import clear_cache
+
+from app.logger import logger
 
 from prometheus_fastapi_instrumentator import Instrumentator
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    redis = aioredis.from_url("redis://cdn_redis:6379", decode_responses=False)
+    redis = aioredis.from_url("redis://localhost:6379", decode_responses=False)
     FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
     yield
 
@@ -36,22 +37,21 @@ app.add_middleware(
 )
 
 app.include_router(cities_router)
+
+
 instrumentator = Instrumentator(
     should_group_status_codes=False,
     excluded_handlers=["/metrics"],
 )
 instrumentator.instrument(app).expose(app)
 
-@app.get("/health")
-async def ping():
-    await clear_cache()
-    return {"status": "OK", "message": "pong"}
-
-
-@app.get("/clear-cache")
-async def ping():
-    try:
-        await clear_cache()
-        return {"status": "OK", "message": "cache cleared successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    logger.info("Request execution time", extra={
+                "url": request.url,
+                "process_time": round(process_time, 4)
+    })
+    return response

@@ -1,7 +1,6 @@
 from fastapi import HTTPException
 from geoalchemy2.functions import ST_SetSRID, ST_MakePoint, ST_DistanceSphere
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
 
 from app.cities.utils import get_coordinates
 from app.database import async_session_maker
@@ -13,21 +12,23 @@ class CitiesDAO(BaseDAO):
     model = City
 
     @classmethod
-    async def add(cls, name, coordinates, session: AsyncSession):
-        new_city = cls.model(
-            name=name.lower(),
-            geom=f'SRID=4326;POINT({coordinates["longitude"]} {coordinates["latitude"]})',
-            latitude=float(coordinates["latitude"]),
-            longitude=float(coordinates["longitude"])
-        )
+    async def add(cls, city_name, coordinates):
+        async with async_session_maker() as session:
 
-        session.add(new_city)
+            async with session.begin():
+                new_city = cls.model(
+                    name=city_name.lower(),
+                    geom=f'SRID=4326;POINT({coordinates["longitude"]} {coordinates["latitude"]})',
+                    latitude=float(coordinates["latitude"]),
+                    longitude=float(coordinates["longitude"])
+                )
 
-        await session.commit()
+                session.add(new_city)
 
-        await session.refresh(new_city)
-        new_city.name = new_city.name.title()
-        return new_city
+            await session.refresh(new_city)
+
+            new_city.name = new_city.name.title()
+            return new_city
 
     @classmethod
     async def find_nearest_by_coord(cls, latitude, longitude, limit=2, offset=0):
@@ -55,3 +56,13 @@ class CitiesDAO(BaseDAO):
             offset=offset
         )
         return result
+
+
+    @classmethod
+    async def delete_by_name(cls, city_name):
+        async with async_session_maker() as session:
+            async with session.begin():
+                await session.execute(
+                    delete(cls.model).where(cls.model.name == city_name.lower())
+                )
+                await session.commit()

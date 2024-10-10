@@ -1,15 +1,14 @@
 from typing import Optional
 
-from fastapi import APIRouter, status, Depends, HTTPException, Query
+from fastapi import APIRouter, status, HTTPException, Query
 from fastapi_cache.decorator import cache
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cities.dao import CitiesDAO
 from app.cities.schemas import CityResponse
 from app.cities.utils import get_coordinates
-from app.database import get_async_session
 from app.exceptions import CityNotFound, CityAlreadyExist, CitiesNotFound
+from app.logger import logger
 from app.service.cache import clear_cache
 
 router = APIRouter(
@@ -36,6 +35,7 @@ async def get_cities(
         return [CityResponse.from_city(city) for city in cities]
 
     except Exception as e:
+        logger.error(msg=str(e))
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=e)
 
 
@@ -52,6 +52,7 @@ async def get_city(
     try:
         true_city_name = await get_coordinates(city_name)
         city_name = true_city_name['name']
+
         # Получаем город по имени
         city = await CitiesDAO.find_one_or_none(name=city_name.lower())
         if city is None:
@@ -60,8 +61,10 @@ async def get_city(
         return CityResponse.from_city(city)
 
     except HTTPException as e:
+        logger.info(msg=e.status_code)
         raise e
     except Exception as e:
+        logger.error(msg=str(e), extra={"city_name": city_name})
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=e)
 
 
@@ -74,7 +77,6 @@ async def get_city(
 )
 async def create_city(
         city_name: str,
-        session: AsyncSession = Depends(get_async_session)
 ):
     try:
         # Получаем координаты города
@@ -83,21 +85,22 @@ async def create_city(
         # Проверяем, были ли получены координаты
         if 'error' in coordinates:
             raise HTTPException(status_code=400, detail=coordinates['error'])
+        true_city_name = coordinates["name"]
 
-        new_city = await CitiesDAO.add(coordinates['name'], coordinates, session)
+        new_city = await CitiesDAO.add(true_city_name, coordinates)
 
         await clear_cache()
 
         return CityResponse.from_city(new_city)
 
-    except IntegrityError as _:
-        await session.rollback()
-        raise CityAlreadyExist(f"'{coordinates['name']}' ('{city_name}')")
+    except IntegrityError as e:
+        logger.info(msg="400")
+        raise CityAlreadyExist(f"'{true_city_name}' ('{city_name}')")
     except HTTPException as e:
-        await session.rollback()
+        logger.info(msg=e.status_code)
         raise e
     except Exception as e:
-        await session.rollback()
+        logger.error(msg=str(e), extra={"city_name": city_name})
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
@@ -109,7 +112,6 @@ async def create_city(
 )
 async def delete_city(
         city_name: str,
-        session: AsyncSession = Depends(get_async_session)
 ):
     try:
         true_city_name = await get_coordinates(city_name)
@@ -119,15 +121,15 @@ async def delete_city(
         if city is None:
             raise CityNotFound
 
-        await session.delete(city)
-        await session.commit()
+        await CitiesDAO.delete_by_name(city_name=city.name)
+
         await clear_cache()
 
     except HTTPException as e:
-        await session.rollback()
+        logger.info(msg=e.status_code)
         raise e
     except Exception as e:
-        await session.rollback()
+        logger.error(msg=str(e), extr={"city_name": city_name})
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
@@ -156,8 +158,10 @@ async def get_nearest_cities(
         return [CityResponse.from_city(city) for city in nearest_cities]
 
     except HTTPException as e:
+        logger.info(msg=e.status_code)
         raise e
     except Exception as e:
+        logger.error(msg=str(e), extra={"latitude": latitude, "longitude": longitude})
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
@@ -185,6 +189,8 @@ async def get_nearest_cities_by_name(
         return [CityResponse.from_city(city) for city in nearest_cities]
 
     except HTTPException as e:
+        logger.info(msg=e.status_code)
         raise e
     except Exception as e:
+        logger.error(msg=str(e), extr={"city_name": city_name})
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
