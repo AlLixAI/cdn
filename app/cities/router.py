@@ -87,15 +87,16 @@ async def create_city(
             raise HTTPException(status_code=400, detail=coordinates['error'])
         true_city_name = coordinates["name"]
 
+        check_city = await CitiesDAO.find_one_or_none(name=true_city_name.lower())
+        if not check_city:
+            raise CityAlreadyExist(f"'{true_city_name}' ('{city_name}')")
+
         new_city = await CitiesDAO.add(true_city_name, coordinates)
 
         await clear_cache()
 
         return CityResponse.from_city(new_city)
 
-    except IntegrityError as e:
-        logger.info(msg="400")
-        raise CityAlreadyExist(f"'{true_city_name}' ('{city_name}')")
     except HTTPException as e:
         logger.info(msg=e.status_code)
         raise e
