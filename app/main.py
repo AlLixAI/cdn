@@ -2,7 +2,7 @@ import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.cities.router import router as cities_router
@@ -14,6 +14,9 @@ from redis import asyncio as aioredis
 from app.logger import logger
 
 from prometheus_fastapi_instrumentator import Instrumentator
+
+from app.service.cache import clear_cache
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -55,3 +58,7 @@ async def add_process_time_header(request: Request, call_next):
                 "process_time": round(process_time, 4)
     })
     return response
+
+@app.post("/clear-cache", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_cache_func():
+    await clear_cache()
