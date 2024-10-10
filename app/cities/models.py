@@ -10,7 +10,7 @@ class City(Base):
     __tablename__ = 'cities'
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True, unique=True, nullable=False)
-    name = Column(String(length=200), nullable=False, unique=True)
+    name = Column(String(length=200), nullable=False, index=True, unique=True)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     geom = Column(Geometry(geometry_type='POINT', srid=4326), nullable=False)

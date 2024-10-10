@@ -2,7 +2,6 @@ from typing import Optional
 
 from fastapi import APIRouter, status, HTTPException, Query
 from fastapi_cache.decorator import cache
-from sqlalchemy.exc import IntegrityError
 
 from app.cities.dao import CitiesDAO
 from app.cities.schemas import CityResponse
@@ -88,7 +87,7 @@ async def create_city(
         true_city_name = coordinates["name"]
 
         check_city = await CitiesDAO.find_one_or_none(name=true_city_name.lower())
-        if not check_city:
+        if check_city is not None:
             raise CityAlreadyExist(f"'{true_city_name}' ('{city_name}')")
 
         new_city = await CitiesDAO.add(true_city_name, coordinates)

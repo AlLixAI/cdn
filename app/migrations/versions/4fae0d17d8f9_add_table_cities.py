@@ -32,9 +32,11 @@ def upgrade() -> None:
     # Создание индекса для geom, если он не существует
     op.execute("CREATE INDEX IF NOT EXISTS idx_cities_geom ON cities USING gist (geom);")
     op.create_index(op.f('ix_cities_id'), 'cities', ['id'], unique=True)
+    op.create_index(op.f('ix_cities_name'), 'cities', ['name'], unique=True)
 
 def downgrade() -> None:
     op.drop_index(op.f('ix_cities_id'), table_name='cities')
+    op.drop_index(op.f('ix_cities_name'), table_name='cities')
     op.drop_index('idx_cities_geom', table_name='cities', postgresql_using='gist')
     op.drop_table('cities')
 
